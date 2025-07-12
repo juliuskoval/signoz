@@ -26,8 +26,9 @@ type StorableOrgDomain struct {
 type SSOType string
 
 const (
-	SAML       SSOType = "SAML"
-	GoogleAuth SSOType = "GOOGLE_AUTH"
+	SAML         SSOType = "SAML"
+	GoogleAuth   SSOType = "GOOGLE_AUTH"
+	GenericOAuth SSOType = "GENERIC_OAUTH"
 )
 
 // GettableOrgDomain identify org owned web domains for auth and other purposes
@@ -37,8 +38,9 @@ type GettableOrgDomain struct {
 	SsoEnabled bool    `json:"ssoEnabled"`
 	SsoType    SSOType `json:"ssoType"`
 
-	SamlConfig       *ssotypes.SamlConfig        `json:"samlConfig"`
-	GoogleAuthConfig *ssotypes.GoogleOAuthConfig `json:"googleAuthConfig"`
+	SamlConfig         *ssotypes.SamlConfig         `json:"samlConfig"`
+	GoogleAuthConfig   *ssotypes.GoogleOAuthConfig  `json:"googleAuthConfig"`
+	GenericOAuthConfig *ssotypes.GenericOAuthConfig `json:"genericOAuthConfig"`
 
 	Org *Organization
 }
@@ -117,6 +119,14 @@ func (od *GettableOrgDomain) PrepareGoogleOAuthProvider(siteUrl *url.URL) (ssoty
 	return od.GoogleAuthConfig.GetProvider(od.Name, siteUrl)
 }
 
+func (od *GettableOrgDomain) PrepareGenericOAuthProvider(siteUrl *url.URL) (ssotypes.OAuthCallbackProvider, error) {
+	if od.GenericOAuthConfig == nil {
+		return nil, fmt.Errorf("GENERICOAUTH is not setup correctly for this domain")
+	}
+
+	return od.GenericOAuthConfig.GetProvider(od.Name, siteUrl)
+}
+
 // PrepareSamlRequest creates a request accordingly gosaml2
 func (od *GettableOrgDomain) PrepareSamlRequest(siteUrl *url.URL) (*saml2.SAMLServiceProvider, error) {
 
@@ -179,6 +189,14 @@ func (od *GettableOrgDomain) BuildSsoUrl(siteUrl *url.URL) (ssoUrl string, err e
 			return "", err
 		}
 		return googleProvider.BuildAuthURL(relayState)
+
+	case GenericOAuth:
+
+		genericOAuthProvider, err := od.PrepareGenericOAuthProvider(siteUrl)
+		if err != nil {
+			return "", err
+		}
+		return genericOAuthProvider.BuildAuthURL(relayState)
 
 	default:
 		return "", fmt.Errorf("unsupported SSO config for the domain")

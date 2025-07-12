@@ -3,7 +3,12 @@ import { Typography } from 'antd';
 import { FeatureKeys } from 'constants/features';
 import { useAppContext } from 'providers/App/App';
 import { useCallback, useMemo } from 'react';
-import { AuthDomain, GOOGLE_AUTH, SAML } from 'types/api/SAML/listDomain';
+import {
+	AuthDomain,
+	GENERIC_OAUTH,
+	GOOGLE_AUTH,
+	SAML,
+} from 'types/api/SAML/listDomain';
 
 import Row, { RowProps } from './Row';
 import { RowContainer, RowSpace } from './styles';
@@ -20,6 +25,12 @@ function Create({
 
 	const onGoogleAuthClickHandler = useCallback(() => {
 		assignSsoMethod(GOOGLE_AUTH);
+		setIsSettingsOpen(false);
+		setIsEditModalOpen(true);
+	}, [assignSsoMethod, setIsSettingsOpen, setIsEditModalOpen]);
+
+	const onGenericOAuthClickHandler = useCallback(() => {
+		assignSsoMethod(GENERIC_OAUTH);
 		setIsSettingsOpen(false);
 		setIsEditModalOpen(true);
 	}, [assignSsoMethod, setIsSettingsOpen, setIsEditModalOpen]);
@@ -67,6 +78,14 @@ function Create({
 					title: 'Google Apps Authentication',
 					subTitle: 'Let members sign-in with a Google account',
 					onClickHandler: onGoogleAuthClickHandler,
+					isDisabled: false,
+				},
+				{
+					buttonText: ConfigureButtonText,
+					Icon: <GoogleSquareFilled style={{ fontSize: '37px' }} />,
+					title: 'Generic OAuth Authentication',
+					subTitle: 'Let members sign-in with an Oauth provider',
+					onClickHandler: onGenericOAuthClickHandler,
 					isDisabled: false,
 				},
 		  ];
