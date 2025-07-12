@@ -585,6 +585,7 @@ func (aH *APIHandler) RegisterRoutes(router *mux.Router, am *middleware.AuthZ) {
 	router.HandleFunc("/api/v1/login", am.OpenAccess(aH.Signoz.Handlers.User.Login)).Methods(http.MethodPost)
 	router.HandleFunc("/api/v1/loginPrecheck", am.OpenAccess(aH.Signoz.Handlers.User.LoginPrecheck)).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/complete/google", am.OpenAccess(aH.receiveGoogleAuth)).Methods(http.MethodGet)
+	router.HandleFunc("/api/v1/complete/oauth", am.OpenAccess(aH.receiveGenericOAuth)).Methods(http.MethodGet)
 
 	router.HandleFunc("/api/v1/domains", am.AdminAccess(aH.Signoz.Handlers.User.ListDomains)).Methods(http.MethodGet)
 	router.HandleFunc("/api/v1/domains", am.AdminAccess(aH.Signoz.Handlers.User.CreateDomain)).Methods(http.MethodPost)
@@ -2019,6 +2020,66 @@ func (aH *APIHandler) receiveGoogleAuth(w http.ResponseWriter, r *http.Request) 
 	// prepare google callback handler using parsedState -
 	// which contains redirect URL (front-end endpoint)
 	callbackHandler, err := domain.PrepareGoogleOAuthProvider(parsedState)
+	if err != nil {
+		zap.L().Error("[receiveGoogleAuth] failed to prepare google oauth provider", zap.String("domain", domain.String()), zap.Error(err))
+		handleSsoError(w, r, redirectUri)
+		return
+	}
+
+	identity, err := callbackHandler.HandleCallback(r)
+	if err != nil {
+		zap.L().Error("[receiveGoogleAuth] failed to process HandleCallback", zap.String("domain", domain.String()), zap.Error(err))
+		handleSsoError(w, r, redirectUri)
+		return
+	}
+
+	nextPage, err := aH.Signoz.Modules.User.PrepareSsoRedirect(ctx, redirectUri, identity.Email)
+	if err != nil {
+		zap.L().Error("[receiveGoogleAuth] failed to generate redirect URI after successful login ", zap.String("domain", domain.String()), zap.Error(err))
+		handleSsoError(w, r, redirectUri)
+		return
+	}
+
+	http.Redirect(w, r, nextPage, http.StatusSeeOther)
+}
+
+// receiveGoogleAuth completes google OAuth response and forwards a request
+// to front-end to sign user in
+func (aH *APIHandler) receiveGenericOAuth(w http.ResponseWriter, r *http.Request) {
+	redirectUri := constants.GetDefaultSiteURL()
+	ctx := context.Background()
+
+	q := r.URL.Query()
+	if errType := q.Get("error"); errType != "" {
+		zap.L().Error("[receiveGenericOAuth] failed to login with generic oauth", zap.String("error", errType), zap.String("error_description", q.Get("error_description")))
+		http.Redirect(w, r, fmt.Sprintf("%s?ssoerror=%s", redirectUri, "failed to login through SSO"), http.StatusMovedPermanently)
+		return
+	}
+
+	relayState := q.Get("state")
+	zap.L().Debug("[receiveGenericOAuth] relay state received", zap.String("state", relayState))
+
+	parsedState, err := url.Parse(relayState)
+	if err != nil || relayState == "" {
+		zap.L().Error("[receiveGenericOAuth] failed to process response - invalid response from IDP", zap.Error(err), zap.Any("request", r))
+		handleSsoError(w, r, redirectUri)
+		return
+	}
+
+	// upgrade redirect url from the relay state for better accuracy
+	redirectUri = fmt.Sprintf("%s://%s%s", parsedState.Scheme, parsedState.Host, "/login")
+
+	// fetch domain by parsing relay state.
+	domain, err := aH.Signoz.Modules.User.GetDomainFromSsoResponse(ctx, parsedState)
+	if err != nil {
+		handleSsoError(w, r, redirectUri)
+		return
+	}
+
+	// now that we have domain, use domain to fetch sso settings.
+	// prepare google callback handler using parsedState -
+	// which contains redirect URL (front-end endpoint)
+	callbackHandler, err := domain.PrepareGenericOAuthProvider(parsedState)
 	if err != nil {
 		zap.L().Error("[receiveGoogleAuth] failed to prepare google oauth provider", zap.String("domain", domain.String()), zap.Error(err))
 		handleSsoError(w, r, redirectUri)

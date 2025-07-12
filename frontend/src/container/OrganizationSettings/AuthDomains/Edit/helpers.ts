@@ -1,7 +1,10 @@
 import {
 	AuthDomain,
+	GENERIC_OAUTH,
+	GenericOAuthConfig,
 	GOOGLE_AUTH,
 	GoogleAuthConfig,
+	isGenericOAuthConfig,
 	isGoogleAuthConfig,
 	isSAMLConfig,
 	SAML,
@@ -37,4 +40,21 @@ export function parseGoogleAuthForm(
 	}
 
 	return current.googleAuthConfig;
+}
+
+export function parseGenericOAuthForm(
+	current: AuthDomain,
+	formValues: AuthDomain,
+): GenericOAuthConfig | undefined {
+	if (
+		current?.ssoType === GENERIC_OAUTH &&
+		isGenericOAuthConfig(formValues?.genericOAuthConfig)
+	) {
+		return {
+			...current.genericOAuthConfig,
+			...formValues?.genericOAuthConfig,
+		};
+	}
+
+	return current.genericOAuthConfig;
 }

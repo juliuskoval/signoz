@@ -1,4 +1,9 @@
-import { AuthDomain, GOOGLE_AUTH, SAML } from 'types/api/SAML/listDomain';
+import {
+	AuthDomain,
+	GENERIC_OAUTH,
+	GOOGLE_AUTH,
+	SAML,
+} from 'types/api/SAML/listDomain';
 
 export const ConfigureSsoButtonText = (
 	ssoType: AuthDomain['ssoType'],
@@ -8,6 +13,8 @@ export const ConfigureSsoButtonText = (
 			return 'Edit SAML';
 		case GOOGLE_AUTH:
 			return 'Edit Google Auth';
+		case GENERIC_OAUTH:
+			return 'Edit Generic OAuth';
 		default:
 			return 'Configure SSO';
 	}
@@ -38,6 +45,12 @@ export const isSSOConfigValid = (domain: AuthDomain): boolean => {
 			return (
 				domain.googleAuthConfig?.clientId?.length !== 0 &&
 				domain.googleAuthConfig?.clientSecret?.length !== 0
+			);
+		case GENERIC_OAUTH:
+			return (
+				domain.genericOAuthConfig?.clientId?.length !== 0 &&
+				domain.genericOAuthConfig?.clientSecret?.length !== 0 &&
+				domain.genericOAuthConfig?.providerRedirectUrl.length !== 0
 			);
 		default:
 			return false;

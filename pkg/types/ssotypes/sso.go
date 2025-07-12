@@ -49,6 +49,13 @@ type GoogleOAuthConfig struct {
 	RedirectURI  string `json:"redirectURI"`
 }
 
+type GenericOAuthConfig struct {
+	ClientID            string `json:"clientId"`
+	ClientSecret        string `json:"clientSecret"`
+	RedirectURI         string `json:"redirectURI"`
+	ProviderRedirectURL string `json:"providerRedirectUrl"`
+}
+
 const (
 	googleIssuerURL = "https://accounts.google.com"
 )
@@ -87,5 +94,40 @@ func (g *GoogleOAuthConfig) GetProvider(domain string, siteUrl *url.URL) (OAuthC
 		),
 		Cancel:       cancel,
 		HostedDomain: domain,
+	}, nil
+}
+
+func (g *GenericOAuthConfig) GetProvider(domain string, siteUrl *url.URL) (OAuthCallbackProvider, error) {
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	provider, err := oidc.NewProvider(ctx, g.ProviderRedirectURL)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to get provider: %v", err)
+	}
+
+	// to verify identity and start a session.
+	scopes := []string{"email", "openid"}
+
+	// this is the url the provider will call after login completion
+	redirectURL := fmt.Sprintf("%s://%s/%s",
+		siteUrl.Scheme,
+		siteUrl.Host,
+		"api/v1/complete/oauth")
+
+	return &GenericOAuthProvider{
+		RedirectURI: g.RedirectURI,
+		OAuth2Config: &oauth2.Config{
+			ClientID:     g.ClientID,
+			ClientSecret: g.ClientSecret,
+			Endpoint:     provider.Endpoint(),
+			Scopes:       scopes,
+			RedirectURL:  redirectURL,
+		},
+		Verifier: provider.Verifier(
+			&oidc.Config{ClientID: g.ClientID},
+		),
+		Cancel: cancel,
 	}, nil
 }
